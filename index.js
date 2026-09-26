@@ -1,4 +1,15 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    express.static('public');
+    res.send('¡El bot de WhatsApp está activo!');
+});
+
+app.listen(PORT, () => {
+    console.log(`Servidor web interno corriendo en el puerto ${PORT}`);
+});const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
