@@ -1,89 +1,35 @@
-const express = require('express');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const pino = require('pino');
-const qrcode = require('qrcode');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-let latestQR = '';
-
-app.get('/', async (req, res) => {
-    if (latestQR) {
-        if (latestQR.startsWith('CÓDIGO')) {
-            res.send(`
-                <html>
-                    <head><title>Bot WhatsApp Pairing</title></head>
-                    <body style="text-align:center; font-family:sans-serif; margin-top:50px;">
-                        <h1>Código de Vinculación del Bot</h1>
-                        <p>Usa este código en tu WhatsApp (Vincular con el número de teléfono):</p>
-                        <h2 style="background: #f4f4f4; padding: 20px; display: inline-block; color: #25D366; font-size: 36px; letter-spacing: 5px;">${latestQR.replace('CÓDIGO DE VINCULACIÓN: ', '')}</h2>
-                    </body>
-                </html>
-            `);
-        } else {
-            try {
-                const qrImage = await qrcode.toDataURL(latestQR);
-                res.send(`
-                    <html>
-                        <head>
-                            <title>Bot WhatsApp QR</title>
-                            <meta http-equiv="refresh" content="15">
-                        </head>
-                        <body style="text-align:center; font-family:sans-serif; margin-top:50px;">
-                            <h1>Escanea el Código QR para el Bot</h1>
-                            <p>Usa WhatsApp en tu teléfono para escanear este código:</p>
-                            <img src="${qrImage}" alt="QR Code" style="margin-top: 20px; width: 300px; height: 300px;" />
-                        </body>
-                    </html>
-                `);
-            } catch (err) {
-                res.send("<h1>Error al generar la imagen del QR</h1>");
-            }
-        }
-    } else {
-        res.send("<h1>¡El bot ya está conectado o procesando la sesión!</h1>");
-    }
-});
-
-app.listen(PORT, () => {
-    console.log(`Servidor web corriendo en el puerto ${PORT}`);
-});
+const qrcode = require('qrcode-terminal');
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: false,
+        printQRInTerminal: true, // Esto imprime el QR directo en tu consola negra de Windows
         logger: pino({ level: 'silent' }),
-        browser: ["Chrome", "Desktop", "120.0.0.0"]
+        browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
-if (!sock.authState.creds.registered) {
-        const phoneNumber = "1809XXXXXXXX"; // Tu número real
-        setTimeout(async () => {
-            try {
-                // Forzamos un pequeño retraso para que el socket abra bien
-                const code = await sock.requestPairingCode(phoneNumber);
-                console.log(`CÓDIGO DE VINCULACIÓN: ${code}`);
-                latestQR = `CÓDIGO DE VINCULACIÓN: ${code}`;
-            } catch (error) {
-                console.error("Error al solicitar el código de emparejamiento:", error);
-            }
-        }, 8000); // Subimos a 8 segundos para que la conexión con WhatsApp esté firme
-    }
+    sock.ev.on('creds.update', saveCreds);
+
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+        
+        if (qr) {
+            console.log('Escanea este código QR con tu WhatsApp:');
+        }
+
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Conexión cerrada, reconectando...', shouldReconnect);
             if (shouldReconnect) {
                 connectToWhatsApp();
             }
         } else if (connection === 'open') {
-            console.log('¡Conectado exitosamente a WhatsApp!');
-            latestQR = ''; 
+            console.log('¡CONECTADO EXITOSAMENTE A WHATSAPP!');
         }
     });
 
@@ -91,8 +37,9 @@ if (!sock.authState.creds.registered) {
         const msg = m.messages[0];
         if (!msg.key.fromMe && msg.message) {
             const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            console.log(`Mensaje recibido: ${text}`);
             if (text && text.toLowerCase() === 'hola') {
-                await sock.sendMessage(msg.key.remoteJid, { text: '¡Hola! Soy tu bot de WhatsApp corriendo en Render.' });
+                await sock.sendMessage(msg.key.remoteJid, { text: '¡Hola! Ya estoy conectado.' });
             }
         }
     });
