@@ -12,7 +12,7 @@ app.get('/', (req, res) => {
                 <body style="text-align:center; font-family:sans-serif; margin-top:50px;">
                     <h1>Escanea el Código QR para el Bot</h1>
                     <p>Usa WhatsApp en tu teléfono para escanear este código:</p>
-                    <pre style="font-size: 14px; background: #f4f4f4; padding: 20px; display: inline-block; text-align: left;">${latestQR}</pre>
+                    <pre style="font-size: 11px; background: #f4f4f4; padding: 20px; display: inline-block; text-align: left; white-space: pre-wrap; word-break: break-all; max-width: 400px;">${latestQR}</pre>
                 </body>
             </html>
         `);
