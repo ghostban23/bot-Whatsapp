@@ -61,21 +61,19 @@ async function connectToWhatsApp() {
         browser: ["Chrome", "Desktop", "120.0.0.0"]
     });
 
-    sock.ev.on('creds.update', saveCreds);
-
-    if (!sock.authState.creds.registered) {
-        const phoneNumber = "18099891081"; // Reemplaza con tu número real con código de país (ej: 1809...)
+if (!sock.authState.creds.registered) {
+        const phoneNumber = "1809XXXXXXXX"; // Tu número real
         setTimeout(async () => {
             try {
-                let code = await sock.requestPairingCode(phoneNumber);
+                // Forzamos un pequeño retraso para que el socket abra bien
+                const code = await sock.requestPairingCode(phoneNumber);
                 console.log(`CÓDIGO DE VINCULACIÓN: ${code}`);
                 latestQR = `CÓDIGO DE VINCULACIÓN: ${code}`;
             } catch (error) {
                 console.error("Error al solicitar el código de emparejamiento:", error);
             }
-        }, 5000);
+        }, 8000); // Subimos a 8 segundos para que la conexión con WhatsApp esté firme
     }
-
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
