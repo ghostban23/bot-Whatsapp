@@ -74,14 +74,48 @@ async function connectToWhatsApp() {
         }
     });
 
+ async function connectToWhatsApp() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: 'silent' }),
+        browser: ["Chrome", "Desktop", "120.0.0.0"]
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    if (!sock.authState.creds.registered) {
+        const phoneNumber = "1809XXXXXXXX"; // Reemplaza esto con tu número real con código de país
+        setTimeout(async () => {
+            try {
+                let code = await sock.requestPairingCode(phoneNumber);
+                console.log(`CÓDIGO DE VINCULACIÓN: ${code}`);
+                latestQR = `CÓDIGO DE VINCULACIÓN: ${code}`;
+            } catch (error) {
+                console.error("Error al solicitar el código de emparejamiento:", error);
+            }
+        }, 4000);
+    }
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) {
+                connectToWhatsApp();
+            }
+        } else if (connection === 'open') {
+            console.log('¡Conectado exitosamente a WhatsApp!');
+            latestQR = ''; 
+        }
+    });
+
     sock.ev.on('messages.upsert', async (m) => {
-        console.log(JSON.stringify(m, undefined, 2));
         const msg = m.messages[0];
         if (!msg.key.fromMe && msg.message) {
             const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-            console.log(`Mensaje recibido: ${text}`);
-            
-            // Ejemplo de respuesta automática
             if (text && text.toLowerCase() === 'hola') {
                 await sock.sendMessage(msg.key.remoteJid, { text: '¡Hola! Soy tu bot de WhatsApp corriendo en Render.' });
             }
