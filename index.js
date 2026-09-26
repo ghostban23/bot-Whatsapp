@@ -1,68 +1,87 @@
 const express = require('express');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const pino = require('pino');
+const qrcode = require('qrcode');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 let latestQR = '';
 
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
     if (latestQR) {
-        res.send(`
-            <html>
-                <head><title>Bot WhatsApp QR</title></head>
-                <body style="text-align:center; font-family:sans-serif; margin-top:50px;">
-                    <h1>Escanea el Código QR para el Bot</h1>
-                    <p>Usa WhatsApp en tu teléfono para escanear este código:</p>
-                    <pre style="font-size: 11px; background: #f4f4f4; padding: 20px; display: inline-block; text-align: left; white-space: pre-wrap; word-break: break-all; max-width: 400px;">${latestQR}</pre>
-                </body>
-            </html>
-        `);
+        try {
+            const qrImage = await qrcode.toDataURL(latestQR);
+            res.send(`
+                <html>
+                    <head>
+                        <title>Bot WhatsApp QR</title>
+                        <meta http-equiv="refresh" content="15">
+                    </head>
+                    <body style="text-align:center; font-family:sans-serif; margin-top:50px;">
+                        <h1>Escanea el Código QR para el Bot</h1>
+                        <p>Usa WhatsApp en tu teléfono para escanear este código (se actualiza solo):</p>
+                        <img src="${qrImage}" alt="QR Code" style="margin-top: 20px; width: 300px; height: 300px;" />
+                    </body>
+                </html>
+            `);
+        } catch (err) {
+            res.send("<h1>Error al generar la imagen del QR</h1>");
+        }
     } else {
-        res.send("<h1>El bot ya está conectado o procesando la sesión.</h1>");
+        res.send("<h1>¡El bot ya está conectado o procesando la sesión!</h1>");
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`Servidor web interno corriendo en el puerto ${PORT}`);
+    console.log(`Servidor web corriendo en el puerto ${PORT}`);
 });
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
-const pino = require('pino');
-const qrcode = require('qrcode-terminal');
-const fs = require('fs');
-
-const messagetracker = {};
-const consecutiveMessageTracker = {};
-
-async function startBot() {
+async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     
     const sock = makeWASocket({
         auth: state,
+        printQRInTerminal: true,
         logger: pino({ level: 'silent' })
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.udarstven?.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
         if (qr) {
             latestQR = qr;
-            qrcode.generate(qr, { small: true });
+            console.log('Nuevo QR generado');
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (new Boom(lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut);
-            console.log('Conexión cerrada. Reconectando...', shouldReconnect);
+            const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Conexión cerrada. Reconectando:', shouldReconnect);
             if (shouldReconnect) {
-                startBot();
+                connectToWhatsApp();
             }
         } else if (connection === 'open') {
-            console.log('¡Bot conectado exitosamente al WhatsApp!');
+            console.log('¡Conectado exitosamente a WhatsApp!');
             latestQR = ''; 
+        }
+    });
+
+    sock.ev.on('messages.upsert', async (m) => {
+        console.log(JSON.stringify(m, undefined, 2));
+        const msg = m.messages[0];
+        if (!msg.key.fromMe && msg.message) {
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            console.log(`Mensaje recibido: ${text}`);
+            
+            // Ejemplo de respuesta automática
+            if (text && text.toLowerCase() === 'hola') {
+                await sock.sendMessage(msg.key.remoteJid, { text: '¡Hola! Soy tu bot de WhatsApp corriendo en Render.' });
+            }
         }
     });
 }
 
-startBot();
+connectToWhatsApp();
