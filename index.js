@@ -11,23 +11,36 @@ let latestQR = '';
 
 app.get('/', async (req, res) => {
     if (latestQR) {
-        try {
-            const qrImage = await qrcode.toDataURL(latestQR);
+        if (latestQR.startsWith('CÓDIGO')) {
             res.send(`
                 <html>
-                    <head>
-                        <title>Bot WhatsApp QR</title>
-                        <meta http-equiv="refresh" content="15">
-                    </head>
+                    <head><title>Bot WhatsApp Pairing</title></head>
                     <body style="text-align:center; font-family:sans-serif; margin-top:50px;">
-                        <h1>Escanea el Código QR para el Bot</h1>
-                        <p>Usa WhatsApp en tu teléfono para escanear este código (se actualiza solo):</p>
-                        <img src="${qrImage}" alt="QR Code" style="margin-top: 20px; width: 300px; height: 300px;" />
+                        <h1>Código de Vinculación del Bot</h1>
+                        <p>Usa este código en tu WhatsApp (Vincular con el número de teléfono):</p>
+                        <h2 style="background: #f4f4f4; padding: 20px; display: inline-block; color: #25D366; font-size: 36px; letter-spacing: 5px;">${latestQR.replace('CÓDIGO DE VINCULACIÓN: ', '')}</h2>
                     </body>
                 </html>
             `);
-        } catch (err) {
-            res.send("<h1>Error al generar la imagen del QR</h1>");
+        } else {
+            try {
+                const qrImage = await qrcode.toDataURL(latestQR);
+                res.send(`
+                    <html>
+                        <head>
+                            <title>Bot WhatsApp QR</title>
+                            <meta http-equiv="refresh" content="15">
+                        </head>
+                        <body style="text-align:center; font-family:sans-serif; margin-top:50px;">
+                            <h1>Escanea el Código QR para el Bot</h1>
+                            <p>Usa WhatsApp en tu teléfono para escanear este código:</p>
+                            <img src="${qrImage}" alt="QR Code" style="margin-top: 20px; width: 300px; height: 300px;" />
+                        </body>
+                    </html>
+                `);
+            } catch (err) {
+                res.send("<h1>Error al generar la imagen del QR</h1>");
+            }
         }
     } else {
         res.send("<h1>¡El bot ya está conectado o procesando la sesión!</h1>");
@@ -41,42 +54,6 @@ app.listen(PORT, () => {
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
     
-  const sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: true,
-        logger: pino({ level: 'silent' }),
-        browser: ["Ubuntu", "Chrome", "20.0.04"],
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
-        keepAliveIntervalMs: 10000,
-        markOnlineOnConnect: true
-    });
-
-    sock.udarstven?.on('creds.update', saveCreds);
-
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
-        if (qr) {
-            latestQR = qr;
-            console.log('Nuevo QR generado');
-        }
-
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Conexión cerrada. Reconectando:', shouldReconnect);
-            if (shouldReconnect) {
-                connectToWhatsApp();
-            }
-        } else if (connection === 'open') {
-            console.log('¡Conectado exitosamente a WhatsApp!');
-            latestQR = ''; 
-        }
-    });
-
- async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-    
     const sock = makeWASocket({
         auth: state,
         printQRInTerminal: false,
@@ -87,7 +64,7 @@ async function connectToWhatsApp() {
     sock.ev.on('creds.update', saveCreds);
 
     if (!sock.authState.creds.registered) {
-        const phoneNumber = "1809XXXXXXXX"; // Reemplaza esto con tu número real con código de país
+        const phoneNumber = "18099891081"; // Reemplaza con tu número real con código de país (ej: 1809...)
         setTimeout(async () => {
             try {
                 let code = await sock.requestPairingCode(phoneNumber);
@@ -96,7 +73,7 @@ async function connectToWhatsApp() {
             } catch (error) {
                 console.error("Error al solicitar el código de emparejamiento:", error);
             }
-        }, 4000);
+        }, 5000);
     }
 
     sock.ev.on('connection.update', (update) => {
